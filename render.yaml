@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: messagerie-cap
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # Virginia = région Render la plus proche de Neon (aws-sa-east-1, São Paulo).
+    # La région ne peut plus être changée après la création du service.
+    region: virginia
+    # free : mise en veille après 15 min d'inactivité (premier accès ~1 min) ET fichiers
+    # envoyés (pièces jointes, messages vocaux) perdus à chaque redémarrage ou déploiement.
+    # Pour un usage public réel : plan: starter + le bloc "disk" ci-dessous.
+    plan: free
+    healthCheckPath: /health
+    # disk:
+    #   name: uploads
+    #   mountPath: /var/www/html/var/uploads
+    #   sizeGB: 1
+    envVars:
+      - key: APP_ENV
+        value: prod
+      - key: APP_DEBUG
+        value: "0"
+      - key: APP_SECRET
+        generateValue: true      # généré par Render, jamais affiché ni stocké dans GitHub
+      - key: DATABASE_URL
+        sync: false              # à saisir dans le tableau de bord Render (secret)
+      - key: MESSENGER_TRANSPORT_DSN
+        value: "doctrine://default?auto_setup=0"
+      - key: MAILER_DSN
+        value: "null://null"

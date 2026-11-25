@@ -1,0 +1,185 @@
+--- a/templates/messages/index.html.twig
++++ b/templates/messages/index.html.twig
+@@ -251,21 +251,10 @@
+ {% endblock %}
+ 
+ {% block body %}
+-{% set perPage = 5 %}
+-{% set receivedAll = app.user.received|sort((a, b) => b.createdAt <=> a.createdAt) %}
+-{% set sentAll = app.user.sent|sort((a, b) => b.createdAt <=> a.createdAt) %}
+-{% set unreadCount = receivedAll|filter(m => not m.isRead)|length %}
+-{% set allMessages = receivedAll|merge(sentAll) %}
+-
+-{# Onglet + pagination #}
+-{% set tabParam = app.request.query.get('tab', 'received') %}
+-{% set tab = tabParam == 'sent' ? 'sent' : 'received' %}
+-{% set list = tab == 'sent' ? sentAll : receivedAll %}
+-{% set totalPages = max(1, (list|length / perPage)|round(0, 'ceil')) %}
+-{% set page = min(max(1, app.request.query.getInt('page', 1)), totalPages) %}
+-{% set pageItems = list|slice((page - 1) * perPage, perPage) %}
+-{% set from = list|length == 0 ? 0 : (page - 1) * perPage + 1 %}
+-{% set to = min(page * perPage, list|length) %}
++{# Données fournies par MessagesController::index() : perPage, tab, page, totalPages, pageItems,
++   receivedCount, sentCount, unreadCount, listCount, activity (requêtes SQL paginées). #}
++{% set from = listCount == 0 ? 0 : (page - 1) * perPage + 1 %}
++{% set to = min(page * perPage, listCount) %}
+ 
+ {% set hour = 'now'|date('G') %}
+ {% set greeting = hour < 12 ? 'Bonjour' : (hour < 18 ? 'Bon après-midi' : 'Bonsoir') %}
+@@ -296,7 +285,7 @@
+             </a>
+             <a href="{{ path('app_sent') }}">
+               <i class="bi bi-send"></i> Éléments envoyés
+-              <span class="count">{{ sentAll|length }}</span>
++              <span class="count">{{ sentCount }}</span>
+             </a>
+           </nav>
+ 
+@@ -362,13 +351,13 @@
+           <div class="col-sm-4">
+             <div class="mx-stat">
+               <span class="ico i1"><i class="bi bi-inbox"></i></span>
+-              <div><b>{{ receivedAll|length }}</b><small>Messages reçus</small></div>
++              <div><b>{{ receivedCount }}</b><small>Messages reçus</small></div>
+             </div>
+           </div>
+           <div class="col-sm-4">
+             <div class="mx-stat">
+               <span class="ico i2"><i class="bi bi-send-check"></i></span>
+-              <div><b>{{ sentAll|length }}</b><small>Messages envoyés</small></div>
++              <div><b>{{ sentCount }}</b><small>Messages envoyés</small></div>
+             </div>
+           </div>
+           <div class="col-sm-4">
+@@ -386,10 +375,10 @@
+             <section class="mx-panel h-100">
+               <div class="mx-tabs">
+                 <a href="{{ path('app_messages', {tab: 'received'}) }}" class="mx-tab {{ tab == 'received' ? 'active' }}">
+-                  <i class="bi bi-inbox"></i> Reçus <span class="pill">{{ receivedAll|length }}</span>
++                  <i class="bi bi-inbox"></i> Reçus <span class="pill">{{ receivedCount }}</span>
+                 </a>
+                 <a href="{{ path('app_messages', {tab: 'sent'}) }}" class="mx-tab {{ tab == 'sent' ? 'active' }}">
+-                  <i class="bi bi-send"></i> Envoyés <span class="pill">{{ sentAll|length }}</span>
++                  <i class="bi bi-send"></i> Envoyés <span class="pill">{{ sentCount }}</span>
+                 </a>
+               </div>
+ 
+@@ -433,7 +422,7 @@
+               </div>
+ 
+               <div class="mx-foot">
+-                <small>{{ from }}–{{ to }} sur {{ list|length }}</small>
++                <small>{{ from }}–{{ to }} sur {{ listCount }}</small>
+                 {% if totalPages > 1 %}
+                   <div class="mx-pages">
+                     <a href="{{ path('app_messages', {tab: tab, page: page - 1}) }}" class="{{ page <= 1 ? 'off' }}" aria-label="Précédent"><i class="bi bi-chevron-left"></i></a>
+@@ -459,7 +448,7 @@
+               <div class="bars">
+                 {% for i in 6..0 %}
+                   {% set day = 'now'|date_modify('-' ~ i ~ ' days')|date('Y-m-d') %}
+-                  {% set n = allMessages|filter(m => m.createdAt|date('Y-m-d') == day)|length %}
++                  {% set n = activity[day]|default(0) %}
+                   <div class="bar {{ n == 0 ? 'zero' }}" title="{{ n }} message{{ n > 1 ? 's' : '' }}">
+                     <b>{{ n }}</b>
+                     <i style="height: {{ n == 0 ? 6 : min(100, 20 + n * 18) }}%"></i>
+--- a/templates/messages/received.html.twig
++++ b/templates/messages/received.html.twig
+@@ -672,20 +672,10 @@
+ 
+ {% block body %}
+ 
+-{% set perPage = 5 %}
+-{% set receivedAll = app.user.received|sort((a, b) => b.createdAt <=> a.createdAt) %}
+-{% set unreadList = receivedAll|filter(m => not m.isRead) %}
+-{% set readList = receivedAll|filter(m => m.isRead) %}
+-{% set unreadCount = unreadList|length %}
+-
+-{% set fParam = app.request.query.get('filter', 'all') %}
+-{% set currentFilter = fParam in ['unread', 'read'] ? fParam : 'all' %}
+-{% set list = currentFilter == 'unread' ? unreadList : (currentFilter == 'read' ? readList : receivedAll) %}
+-{% set totalPages = max(1, (list|length / perPage)|round(0, 'ceil')) %}
+-{% set page = min(max(1, app.request.query.getInt('page', 1)), totalPages) %}
+-{% set pageItems = list|slice((page - 1) * perPage, perPage) %}
+-{% set from = list|length == 0 ? 0 : (page - 1) * perPage + 1 %}
+-{% set to = min(page * perPage, list|length) %}
++{# Données fournies par MessagesController::received() : perPage, currentFilter, page, totalPages,
++   pageItems, receivedCount, unreadCount, readCount, listCount (requêtes SQL paginées). #}
++{% set from = listCount == 0 ? 0 : (page - 1) * perPage + 1 %}
++{% set to = min(page * perPage, listCount) %}
+ {% set today = 'now'|date('Y-m-d') %}
+ 
+ <div class="gl" id="gl">
+@@ -736,7 +726,7 @@
+         <div class="gl-title">
+             <h1>Boîte de <span>réception</span></h1>
+             <p>
+-                {{ receivedAll|length }} message{{ receivedAll|length > 1 ? 's' : '' }}
++                {{ receivedCount }} message{{ receivedCount > 1 ? 's' : '' }}
+                 {% if unreadCount > 0 %}
+                     · <strong>{{ unreadCount }} non lu{{ unreadCount > 1 ? 's' : '' }}</strong>
+                 {% else %}
+@@ -753,7 +743,7 @@
+ 
+                     <div class="gl-chips">
+                         <a href="{{ path('app_received', {filter: 'all'}) }}" class="gl-chip {{ currentFilter == 'all' ? 'on' }}">
+-                            <i class="bi bi-list-ul"></i> Tous <span class="n">{{ receivedAll|length }}</span>
++                            <i class="bi bi-list-ul"></i> Tous <span class="n">{{ receivedCount }}</span>
+                         </a>
+ 
+                         <a href="{{ path('app_received', {filter: 'unread'}) }}" class="gl-chip {{ currentFilter == 'unread' ? 'on' }}">
+@@ -761,7 +751,7 @@
+                         </a>
+ 
+                         <a href="{{ path('app_received', {filter: 'read'}) }}" class="gl-chip {{ currentFilter == 'read' ? 'on' }}">
+-                            <i class="bi bi-envelope-open"></i> Lus <span class="n">{{ readList|length }}</span>
++                            <i class="bi bi-envelope-open"></i> Lus <span class="n">{{ readCount }}</span>
+                         </a>
+                     </div>
+ 
+@@ -827,7 +817,7 @@
+                     </div>
+ 
+                     <div class="gl-foot">
+-                        <small>{{ from }}–{{ to }} sur {{ list|length }}</small>
++                        <small>{{ from }}–{{ to }} sur {{ listCount }}</small>
+ 
+                         {% if totalPages > 1 %}
+                             <div class="gl-pages">
+--- a/templates/messages/sent.html.twig
++++ b/templates/messages/sent.html.twig
+@@ -646,10 +646,7 @@
+ {% endblock %}
+ 
+ {% block body %}
+-{% set sentMessages = app.user.sent|sort((a, b) => b.createdAt <=> a.createdAt) %}
+-{% set totalSent = sentMessages|length %}
+-{# Les variables définies dans un for ne sortent pas de la boucle en Twig : on utilise filter #}
+-{% set readCount = sentMessages|filter(m => m.isRead)|length %}
++{# Données fournies par MessagesController::sent() : sentMessages (les plus récents), totalSent, readCount, sentLimit #}
+ {% set unreadCount = totalSent - readCount %}
+ {% set readRate = totalSent > 0 ? (readCount / totalSent * 100)|round : 0 %}
+ 
+@@ -807,6 +804,12 @@
+                     {% endfor %}
+                 </div>
+ 
++                {% if totalSent > sentLimit %}
++                    <p class="text-center small text-muted mt-2 mb-0">
++                        Les {{ sentLimit }} messages les plus récents sont affichés sur {{ totalSent }}.
++                    </p>
++                {% endif %}
++
+                 <div class="sx-empty" id="sxNoResult" hidden>
+                     <div class="sx-empty-icon"><i class="bi bi-search"></i></div>
+                     <h3>Aucun message trouvé</h3>
+--- a/templates/messages/send.html.twig
++++ b/templates/messages/send.html.twig
+@@ -249,7 +249,7 @@
+ {% endblock %}
+ 
+ {% block body %}
+-{% set unreadCount = app.user.received|filter(m => not m.isRead)|length %}
++{# unreadCount est fourni par MessagesController::send() #}
+ 
+ <div class="sp" id="sp">
+   <div class="container-fluid py-3">
