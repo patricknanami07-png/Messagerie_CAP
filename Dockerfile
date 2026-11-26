@@ -29,6 +29,7 @@ WORKDIR /var/www/html
 # 1) Code source d'origine
 COPY messagerie_github_source.zip /tmp/source.zip
 RUN unzip -q /tmp/source.zip -d /var/www/html && rm /tmp/source.zip
+RUN chmod -R a+rX /var/www/html
 
 # 2) Corrections : fichiers PHP/YAML remplacés, puis patch des 4 templates
 COPY HealthController.php MessagesController.php RegistrationController.php /var/www/html/src/Controller/
